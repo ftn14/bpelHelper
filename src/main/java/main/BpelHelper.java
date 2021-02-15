@@ -27,48 +27,33 @@ import org.xml.sax.SAXException;
 
 public class BpelHelper {
 
-    private final String microflowPath;
+    private final String projectPath;
 
-    private List<Document> bpels;
-    private Map<String, String> untreatedComponents;
-    private Transformer transformer;
-    private DocumentBuilder documentBuilder;
+    private final List<Document> bpels;
+    private final Map<String, String> untreatedComponents;
+    private final Transformer transformer;
+    private final DocumentBuilder documentBuilder;
     private int countOfDeletedPartners = 0;
 
-    public BpelHelper(String microflowPath) throws ParserConfigurationException, IOException, TransformerConfigurationException {
-        this.microflowPath = microflowPath;
+    public BpelHelper(String projectPath) throws ParserConfigurationException, IOException, TransformerConfigurationException {
+        this.projectPath = projectPath;
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         this.documentBuilder = dbf.newDocumentBuilder();
-        Stream<Path> paths = Files.walk(Paths.get(this.microflowPath));
-        Optional<List<Document>> documents = Optional.of(
-                paths
-                        .map(Path::toFile)
-                        .filter(file -> file.getName().endsWith(".bpel"))
-                        .map(file -> strictParseFile(file, documentBuilder))
-                        .collect(Collectors.toList()));
+
+        Stream<Path> paths = Files.walk(Paths.get(this.projectPath));
+	    Optional<List<Document>> documents = Optional.of(
+			    paths.map(Path::toFile)
+					    .filter(file -> file.getName().endsWith(".bpel"))
+					    .map(file -> strictParseFile(file, documentBuilder))
+					    .collect(Collectors.toList())
+	    );
         bpels = documents.orElseThrow(() -> new RuntimeException("No required files found"));
+
         TransformerFactory transformerFactory = TransformerFactory.newInstance();
         this.transformer = transformerFactory.newTransformer();
         this.transformer.setOutputProperty(OutputKeys.INDENT, "no");
         this.transformer.setOutputProperty(OutputKeys.ENCODING, bpels.get(0).getXmlEncoding());
         untreatedComponents = new HashMap<>();
-    }
-
-    private Document strictParseFile(File file, DocumentBuilder documentBuilder) {
-        try {
-            return documentBuilder.parse(file);
-        } catch (Exception e) {
-            throw new RuntimeException("problems during parsing file: " + file.getName());
-        }
-    }
-
-    private Document parseFile(File file, DocumentBuilder documentBuilder) {
-        try {
-            return documentBuilder.parse(file);
-        } catch (SAXException | IOException e) {
-            untreatedComponents.put(file.getAbsolutePath(), "Error during parsing file");
-            return null;
-        }
     }
 
     public void removeExcessPartners() throws XPathExpressionException, TransformerException {
@@ -117,7 +102,26 @@ public class BpelHelper {
         untreatedComponents.forEach((key, value) -> System.out.println(key + " : " + value));
     }
 
-    private void deletePartnerLinkTypeFromWsdl(Document bpel, NamedNodeMap partnerAttributes) {
+
+	private Document strictParseFile(File file, DocumentBuilder documentBuilder) {
+		try {
+			return documentBuilder.parse(file);
+		} catch (Exception e) {
+			throw new RuntimeException("problems during parsing file: " + file.getName());
+		}
+	}
+
+	private Document parseFile(File file, DocumentBuilder documentBuilder) {
+		try {
+			return documentBuilder.parse(file);
+		} catch (SAXException | IOException e) {
+			untreatedComponents.put(file.getAbsolutePath(), "Error during parsing file");
+			return null;
+		}
+	}
+
+
+	private void deletePartnerLinkTypeFromWsdl(Document bpel, NamedNodeMap partnerAttributes) {
         try {
             deletePartnerLinkType(getWsdlDocument(bpel), partnerAttributes.getNamedItem("partnerLinkType").getTextContent().split(":")[1]);
         } catch (IOException e) {
@@ -241,7 +245,7 @@ public class BpelHelper {
         String[] splitedBpelPath = bpelPath.split("/");
         String bpelName = splitedBpelPath[splitedBpelPath.length - 1].replace(".bpel", "");
         String componentExtension = ".component";
-        Path componentPath = Paths.get(microflowPath + File.separator + bpelName + componentExtension);
+        Path componentPath = Paths.get(projectPath + File.separator + bpelName + componentExtension);
         Optional<File> componentFile = Optional.of(componentPath.toFile());
         return componentFile.map(file -> parseFile(file, documentBuilder)).orElseThrow(IOException::new);
     }
